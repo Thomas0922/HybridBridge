@@ -1,10 +1,15 @@
 # Terraform
 *.tfstate
 *.tfstate.*
+*.tfstate.backup
 .terraform/
 .terraform.lock.hcl
 *.tfvars
 crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
 
 # Kubernetes
 *.swp
@@ -15,17 +20,26 @@ crash.log
 .vscode/
 .idea/
 *.iml
-
-# OS
 .DS_Store
-Thumbs.db
 
-# Secrets
+# Secrets and Credentials
 *.pem
 *.key
 secrets/
 credentials/
+*.pub
 
 # Logs
 *.log
 logs/
+
+# Documentation outputs (含敏感 IP)
+docs/aws-outputs.txt
+docs/aws-vpn-pubkey.txt
+docs/k8s-vpn-pubkey.txt
+docs/my-public-ip.txt
+
+# Temporary files
+tmp/
+temp/
+*.tmp
