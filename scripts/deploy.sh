@@ -233,8 +233,14 @@ sudo bash scripts/setup-k8s-vpn.sh
 echo "設定 AWS 端 VPN..."
 bash scripts/setup-aws-vpn.sh
 
+
+
 # 啟動 VPN
 echo "啟動 K8s 端 VPN..."
+
+# === 新增：先停止舊連線，忽略錯誤 (|| true) ===
+sudo wg-quick down wg0 2>/dev/null || true
+# ==========================================
 sudo wg-quick up wg0
 sudo systemctl enable wg-quick@wg0
 
