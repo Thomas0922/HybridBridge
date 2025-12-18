@@ -181,6 +181,22 @@ aws sts get-caller-identity
 
 應該會顯示你的 AWS 帳戶資訊，表示配置成功。
 
+#### 安裝 kubectl (選用)
+
+雖然 K3s 腳本會在伺服器端自動設定 kubectl，但建議您也在本地安裝以方便操作。
+
+**Linux (Ubuntu/Debian)：**
+```bash
+# 下載最新穩定版
+curl -LO "[https://dl.k8s.io/release/$(curl](https://dl.k8s.io/release/$(curl) -L -s [https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl](https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl)"
+
+# 設定執行權限並移動到 PATH
+chmod +x kubectl
+sudo mv kubectl /usr/local/bin/
+
+# 驗證安裝
+kubectl version --client
+
 ---
 ### 前置需求
 
