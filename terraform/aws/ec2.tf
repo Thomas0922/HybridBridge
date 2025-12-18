@@ -69,7 +69,7 @@ resource "aws_instance" "test_server" {
               set -e
               
               apt-get update
-              apt-get upgrade -y
+            
               
               apt-get install -y nginx
               
