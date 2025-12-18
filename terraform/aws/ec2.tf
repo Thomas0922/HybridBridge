@@ -25,28 +25,37 @@ resource "aws_instance" "vpn_gateway" {
               #!/bin/bash
               set -e
               
-              apt-get update
-              apt-get upgrade -y
+               # 【新增】設定非互動模式，防止 apt-get upgrade 卡住
+               export DEBIAN_FRONTEND=noninteractive
               
-              apt-get install -y wireguard wireguard-tools
+               # 檢查並等待鎖定釋放 (避免與其他更新衝突)
+               while fuser /var/lib/dpkg/lock >/dev/null 2>&1 ; do sleep 1 ; done
+               while fuser /var/lib/apt/lists/lock >/dev/null 2>&1 ; do sleep 1 ; done
+            
+               apt-get update
+               # 加入參數以自動回答 "yes" 並保留舊設定
+               apt-get upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
               
-              echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
-              echo "net.ipv6.conf.all.forwarding=1" >> /etc/sysctl.conf
-              sysctl -p
+               apt-get install -y wireguard wireguard-tools
               
-              apt-get install -y htop iotop iftop
+               echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+               echo "net.ipv6.conf.all.forwarding=1" >> /etc/sysctl.conf
+               sysctl -p
               
-              wg genkey | tee /etc/wireguard/privatekey | wg pubkey > /etc/wireguard/publickey
-              chmod 600 /etc/wireguard/privatekey
+               apt-get install -y htop iotop iftop
               
-              echo "VPN Gateway setup complete at $(date)" > /var/log/setup-complete.log
-              EOF
+               # 生成金鑰
+               wg genkey | tee /etc/wireguard/privatekey | wg pubkey > /etc/wireguard/publickey
+               chmod 600 /etc/wireguard/privatekey
+              
+               echo "VPN Gateway setup complete at $(date)" > /var/log/setup-complete.log
+               EOF
 
-  tags = {
-    Name = "${var.project_name}-vpn-gateway"
-    Role = "vpn-gateway"
-  }
-}
+   tags = {
+     Name = "${var.project_name}-vpn-gateway"
+     Role = "vpn-gateway"
+   }
+ }
 
 resource "aws_instance" "test_server" {
   ami                    = data.aws_ami.ubuntu.id
