@@ -238,11 +238,10 @@ echo "啟動 K8s 端 VPN..."
 sudo wg-quick up wg0
 sudo systemctl enable wg-quick@wg0
 
-# 啟動 AWS 端 VPN
+# 改為只檢查狀態
 AWS_VPN_IP=$(cd "$PROJECT_ROOT/terraform/aws" && terraform output -raw vpn_gateway_public_ip)
-echo "啟動 AWS 端 VPN..."
-ssh -i ~/.ssh/hybridbridge-key ubuntu@$AWS_VPN_IP \
-    "sudo wg-quick up wg0 && sudo systemctl enable wg-quick@wg0"
+echo "檢查 AWS 端 VPN 狀態..."
+ssh -i ~/.ssh/hybridbridge-key ubuntu@$AWS_VPN_IP "sudo wg show wg0"
 
 echo -e "${GREEN}✅ VPN 已啟動${NC}"
 echo ""
