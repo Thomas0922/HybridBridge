@@ -10,15 +10,17 @@ spec:
   policyTypes:
   - Egress
   egress:
-  # --- 新增這段：允許 HTTPS 訪問公網 (為了 pip install) ---
+  # 1. 允許訪問網際網路 (供 apt-get 和 pip 使用)
   - to:
     - ipBlock:
         cidr: 0.0.0.0/0
     ports:
     - protocol: TCP
-      port: 443
-  # ----------------------------------------------------
-  # 允許訪問 AWS VPC (10.0.0.0/16) - HTTP/HTTPS
+      port: 443   # HTTPS (pip)
+    - protocol: TCP
+      port: 80    # HTTP (apt-get) <--- 新增這一行
+
+  # 2. 允許訪問 AWS VPC (HTTP/HTTPS)
   - to:
     - ipBlock:
         cidr: 10.0.0.0/16
@@ -28,14 +30,17 @@ spec:
     - protocol: TCP
       port: 443
   
-  # 允許訪問 VPN Gateway 隧道網段（所有 TCP 流量）
+  # 3. 允許訪問 VPN Gateway 隧道網段
   - to:
     - ipBlock:
         cidr: 192.168.100.0/24
     ports:
     - protocol: TCP
+    # 如果想讓 ping 成功，需要 CNI 支援 ICMP 策略，
+    # 或者在這裡不指定 ports (允許所有協定)，如下：
+    # (但 Calico 標準策略對 ICMP 支援較為特殊，通常建議忽略 Ping 測試警告)
   
-  # 允許 DNS 查詢（UDP 53）
+  # 4. 允許 DNS 查詢 (UDP 53)
   - to:
     - namespaceSelector:
         matchLabels:
@@ -46,14 +51,14 @@ spec:
     - protocol: TCP
       port: 53
   
-  # 允許訪問同命名空間的服務
+  # 5. 允許訪問同命名空間服務
   - to:
     - podSelector: {}
     ports:
     - protocol: TCP
       port: 8080
   
-  # 允許訪問 Kubernetes API Server（用於健康檢查等）
+  # 6. 允許訪問 API Server
   - to:
     - namespaceSelector: {}
     ports:
