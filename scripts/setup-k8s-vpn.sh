@@ -6,6 +6,16 @@ set -e
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
 
+# 偵測真實用戶的家目錄（即使使用 sudo）
+if [ -n "$SUDO_USER" ]; then
+    REAL_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+else
+    REAL_HOME=$HOME
+fi
+
+KEY_PATH="$REAL_HOME/.ssh/hybridbridge-key"
+# ===================
+
 echo "╔════════════════════════════════════════════════════╗"
 echo "║     設定 K8s 端 WireGuard VPN                     ║"
 echo "╚════════════════════════════════════════════════════╝"
@@ -68,7 +78,7 @@ echo "這可能需要 1-3 分鐘..."
 
 AWS_READY=false
 for i in {1..12}; do
-    if ssh -i ~/.ssh/hybridbridge-key \
+    if ssh -i "$KEY_PATH" \
            -t \
            -o ConnectTimeout=10 \
            -o StrictHostKeyChecking=no \
@@ -98,7 +108,7 @@ if [ "$AWS_READY" = true ]; then
 fi
 
 # 獲取 AWS 公鑰
-ssh -i ~/.ssh/hybridbridge-key \
+ssh -i "$KEY_PATH" \
     -o StrictHostKeyChecking=no \
     ubuntu@$AWS_VPN_IP \
     "sudo cat /etc/wireguard/publickey" > "$PROJECT_ROOT/docs/aws-vpn-pubkey.txt"
