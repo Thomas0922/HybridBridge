@@ -105,23 +105,58 @@ HybridBridge 是一個生產級的混合雲網路解決方案，透過 WireGuard
 - Kubernetes 基礎概念
 - AWS 服務基本了解
 
-### 安裝步驟
+### 一鍵部署（推薦）
 
-**1. 複製專案**
+如果你想快速完成部署，使用自動化腳本：
 
 ```bash
-git clone https://github.com/yourusername/hybridbridge.git
+# 1. 複製專案
+git clone <YOUR_REPO_URL>
 cd hybridbridge
+
+# 2. 設定腳本執行權限
+chmod +x scripts/*.sh
+
+# 3. 配置 AWS 憑證
+aws configure
+
+# 4. 執行自動化部署
+./scripts/deploy.sh
 ```
 
-**2. 設定 AWS 憑證**
+自動化腳本會完成以下操作：
+- ✅ 生成 SSH 金鑰並上傳到 AWS
+- ✅ 部署 AWS 基礎設施
+- ✅ 安裝 Kubernetes (K3s)
+- ✅ 配置 VPN 連線
+- ✅ 部署測試應用
+- ✅ 執行完整驗證
+
+
+如果你想了解詳細步驟或進行客製化部署，請繼續閱讀「手動部署步驟」。
+
+---
+
+### 手動部署步驟
+
+#### **1. 複製專案並設定權限**
+
+```bash
+git clone <YOUR_REPO_URL>
+cd hybridbridge
+
+# 設定腳本執行權限（重要！）
+chmod +x scripts/*.sh
+```
+
+#### **2. 設定 AWS 憑證**
 
 ```bash
 aws configure
 # 輸入你的 AWS Access Key 和 Secret Key
 ```
 
-**3. 準備配置檔**
+#### **3. 準備配置檔**
 
 ```bash
 # 建立必要目錄
@@ -132,16 +167,26 @@ curl -s ifconfig.me > docs/my-public-ip.txt
 
 # 建立 Terraform 變數檔
 cd terraform/aws
+
+# 讀取 IP 並創建配置（變數會正確展開）
+MY_IP=$(cat ../../docs/my-public-ip.txt)
 cat > terraform.tfvars << EOF
-aws_region      = "us-west-2"
-project_name    = "hybridbridge"
-environment     = "dev"
-k8s_public_ip   = "$(cat ../../docs/my-public-ip.txt)"
-key_pair_name   = "hybridbridge-key"
+aws_region       = "us-west-2"
+project_name     = "hybridbridge"
+environment      = "dev"
+k8s_public_ip    = "$MY_IP"
+key_pair_name    = "hybridbridge-key"
+allowed_ssh_cidr = ["$MY_IP/32"]
 EOF
+
+cd ../..
 ```
 
-**4. 生成並上傳 SSH 金鑰**
+**重要說明：**
+- `k8s_public_ip` 和 `allowed_ssh_cidr` 使用你的實際公網 IP
+- 如果 IP 改變（例如重新連線），需要更新此檔案並執行 `terraform apply`
+
+#### **4. 生成並上傳 SSH 金鑰**
 
 ```bash
 # 生成 SSH 金鑰
@@ -154,18 +199,25 @@ aws ec2 import-key-pair \
     --region us-west-2
 ```
 
-**5. 部署 AWS 基礎設施**
+#### **5. 部署 AWS 基礎設施**
 
 ```bash
+cd terraform/aws
+
 # 初始化並部署 AWS 資源
 terraform init
 terraform apply
 
-# 儲存輸出（可選）
+# 儲存輸出（可選，便於後續查詢）
 terraform output > ../../docs/aws-outputs.txt
 ```
 
-**6. 安裝 Kubernetes**
+**成功標誌：**
+- VPC、子網路、安全組已建立
+- 2 個 EC2 實例正在運行
+- NAT Gateway 已部署
+
+#### **6. 安裝 Kubernetes**
 
 ```bash
 cd ~/hybridbridge
@@ -184,45 +236,59 @@ sudo chown $(id -u):$(id -g) ~/.kube/config
 kubectl get nodes
 ```
 
-**7. 設定 VPN**
+**成功標誌：**
+```
+NAME    STATUS   ROLES                  AGE   VERSION
+node1   Ready    control-plane,master   30s   v1.28.x
+```
+
+#### **7. 設定 VPN**
 
 ```bash
-# 設定 K8s 端 VPN
+# 設定 K8s 端 VPN（會自動等待 AWS 實例就緒）
 ./scripts/setup-k8s-vpn.sh
 
 # 設定 AWS 端 VPN
 ./scripts/setup-aws-vpn.sh
 
-# 啟動 VPN
+# 啟動 K8s 端 VPN
 sudo wg-quick up wg0
 sudo systemctl enable wg-quick@wg0
+
+# 啟動 AWS 端 VPN（透過 SSH）
+AWS_VPN_IP=$(cd terraform/aws && terraform output -raw vpn_gateway_public_ip)
+ssh -i ~/.ssh/hybridbridge-key ubuntu@$AWS_VPN_IP \
+    "sudo wg-quick up wg0 && sudo systemctl enable wg-quick@wg0"
 ```
 
-**8. 驗證 VPN 連線**
+**成功標誌：**
+```bash
+sudo wg show
+# 應該看到 "latest handshake" 在幾秒內
+```
+
+#### **8. 驗證 VPN 連線**
 
 ```bash
 # 執行連通性測試
 ./scripts/test-vpn-connectivity.sh
-
-# 收集 VPN 資訊
-./scripts/collect-vpn-info.sh
 ```
 
-**9. 部署測試應用**
+**預期結果：**
+- ✅ VPN 連線正常
+- ✅ 可以 ping 通 AWS VPN Gateway
+- ✅ 可以 ping 通 Test Server
+- ✅ HTTP 請求成功
+- ✅ 路由設定正確
+
+#### **9. 部署測試應用**
 
 ```bash
 # 建立命名空間
 kubectl apply -f kubernetes/base/namespace.yaml
 
-# 更新 ConfigMap 中的 IP（如果需要）
-cd terraform/aws
-TEST_SERVER_IP=$(terraform output -raw test_server_private_ip)
-VPN_GATEWAY_IP=$(terraform output -raw vpn_gateway_private_ip)
-cd ~/hybridbridge
-
-# 手動更新或使用 sed
-sed -i "s/aws-test-server: .*/aws-test-server: \"http:\/\/$TEST_SERVER_IP\"/" kubernetes/demo-app/configmap.yaml
-sed -i "s/aws-vpn-gateway: .*/aws-vpn-gateway: \"$VPN_GATEWAY_IP\"/" kubernetes/demo-app/configmap.yaml
+# 自動更新 ConfigMap 中的 AWS IP 地址
+./scripts/update-configmap.sh
 
 # 部署應用
 kubectl apply -f kubernetes/demo-app/
@@ -234,7 +300,14 @@ kubectl apply -f kubernetes/network-policies/
 kubectl wait --for=condition=Ready pods -l app=hybrid-test-app -n hybridbridge --timeout=300s
 ```
 
-**10. 驗證應用**
+**成功標誌：**
+```bash
+kubectl get pods -n hybridbridge
+# NAME                               READY   STATUS    RESTARTS   AGE
+# hybrid-test-app-xxxxxxxxxx-xxxxx   1/1     Running   0          1m
+```
+
+#### **10. 驗證應用**
 
 ```bash
 # 測試 Kubernetes 應用
@@ -247,20 +320,38 @@ kubectl wait --for=condition=Ready pods -l app=hybrid-test-app -n hybridbridge -
 ./scripts/demo-hybrid-cloud.sh
 ```
 
+**預期結果：**
+- ✅ 命名空間存在
+- ✅ Deployment 正常運行
+- ✅ Service 存在
+- ✅ 基本端點正常
+- ✅ **AWS 連線成功**（混合雲連線正常）
+
 ### 預期結果
 
 部署成功後，你將擁有：
 
-- 運行中的 Kubernetes 集群
-- 與 AWS VPC 的加密 VPN 連線
-- 可從 K8s Pod 直接訪問 AWS 私有子網路的資源
-- 完整的測試和監控腳本
+- ✅ 運行中的 Kubernetes 集群
+- ✅ 與 AWS VPC 的加密 VPN 連線
+- ✅ 可從 K8s Pod 直接訪問 AWS 私有子網路的資源
+- ✅ 完整的測試和監控腳本
+
+**測試混合雲連線：**
+```bash
+# 啟動 port-forward
+kubectl port-forward -n hybridbridge svc/hybrid-test-app 8080:80
+
+# 在另一個終端測試
+curl http://localhost:8080/test-aws
+# 應該返回: {"status": "success", "connection": "VPN tunnel working!"}
+```
 
 ## 專案結構
 
 ```
 hybridbridge/
 ├── README.md                          # 本文件
+├── LICENSE                            # MIT License
 ├── .gitignore                         # Git 忽略規則
 ├── .gitattributes                     # Git 屬性設定
 │
@@ -286,8 +377,10 @@ hybridbridge/
 │       └── allow-aws.yaml             # 允許訪問 AWS 的網路策略
 │
 ├── scripts/                           # 自動化腳本
+│   ├── deploy.sh                      # 一鍵自動化部署（新增）
 │   ├── setup-k8s-vpn.sh              # K8s 端 VPN 設定
 │   ├── setup-aws-vpn.sh              # AWS 端 VPN 設定
+│   ├── update-configmap.sh           # 更新 ConfigMap IP（新增）
 │   ├── test-vpn-connectivity.sh      # VPN 連通性測試
 │   ├── test-k8s-app.sh               # Kubernetes 應用測試
 │   ├── phase6-final-check.sh         # 完整系統驗證
@@ -297,6 +390,7 @@ hybridbridge/
 │
 └── docs/                              # 文檔目錄
     ├── architecture.md                # 詳細架構說明
+    ├── troubleshooting.md             # 故障排除指南（新增）
     ├── my-public-ip.txt               # 本機公網 IP（自動生成）
     ├── aws-outputs.txt                # Terraform 輸出（自動生成）
     ├── k8s-vpn-pubkey.txt             # K8s VPN 公鑰（自動生成）
@@ -306,12 +400,15 @@ hybridbridge/
 ## 詳細文檔
 
 - **[架構文件](docs/architecture.md)** - 完整的系統架構說明，包含網路拓撲、組件詳解、數據流向分析
+
 ## 腳本說明
 
 ### 設定腳本
 
+- `deploy.sh` - 一鍵自動化部署完整系統（推薦）
 - `setup-k8s-vpn.sh` - 自動設定 K8s 端的 WireGuard VPN
 - `setup-aws-vpn.sh` - 透過 SSH 自動設定 AWS 端的 WireGuard VPN
+- `update-configmap.sh` - 自動更新 ConfigMap 中的 AWS IP 地址
 
 ### 測試腳本
 
@@ -409,6 +506,76 @@ hybridbridge/
 # 降低環境差異導致的問題
 ```
 
+## 故障排除
+
+### 快速診斷
+
+```bash
+# 檢查 VPN 狀態
+sudo wg show
+
+# 檢查路由
+ip route | grep wg0
+
+# 檢查 Pod 狀態
+kubectl get pods -n hybridbridge
+
+# 執行完整診斷
+./scripts/collect-vpn-info.sh
+```
+
+### 常見問題
+
+#### 問題 1: VPN 無法連接
+
+**症狀：** `sudo wg show` 沒有顯示 handshake
+
+**解決方案：**
+```bash
+# 1. 檢查防火牆
+sudo ufw allow 51820/udp
+
+# 2. 檢查 AWS Security Group
+# 確認允許你的 IP 連接 UDP 51820
+
+# 3. 重啟 VPN
+sudo wg-quick down wg0
+sudo wg-quick up wg0
+```
+
+#### 問題 2: Pod 無法訪問 AWS
+
+**症狀：** `curl http://localhost:8080/test-aws` 返回 timeout
+
+**解決方案：**
+```bash
+# 1. 檢查 VPN 連線
+sudo wg show | grep handshake
+
+# 2. 檢查路由
+ip route | grep "10.0.0.0"
+
+# 3. 測試從節點直接 ping
+ping 10.0.2.x  # Test Server IP
+```
+
+#### 問題 3: SSH 無法連接 AWS
+
+**症狀：** SSH connection refused
+
+**解決方案：**
+```bash
+# 1. 檢查你的公網 IP 是否改變
+curl ifconfig.me
+
+# 2. 如果 IP 改變，更新 terraform.tfvars
+cd terraform/aws
+vim terraform.tfvars  # 更新 k8s_public_ip
+
+# 3. 重新 apply
+terraform apply
+```
+
 ## 清理資源
 
 ### 清理 Kubernetes 資源
@@ -451,29 +618,39 @@ terraform destroy
 # 4. 刪除本地配置（可選）
 sudo rm -rf /etc/wireguard/
 rm -rf ~/hybridbridge/docs/*.txt
+
+# 5. 刪除 SSH 金鑰（可選）
+rm ~/.ssh/hybridbridge-key*
 ```
+
+### 成本優化建議
+
+1. **使用 Free Tier** - 新 AWS 帳號前 12 個月可大幅減少成本
+2. **測試完畢後刪除** - 使用 `terraform destroy` 刪除所有資源
+3. **使用 NAT Instance** - 替代 NAT Gateway 可節省約 $30/月（需自行維護）
+4. **選擇更近的區域** - 可降低延遲和數據傳輸費用
 
 ## 安全性
 
 ### 多層安全防護
 
 **網路安全：**
-- VPN 使用 ChaCha20-Poly1305 加密
-- Security Groups 限制連線來源
-- Private Subnet 隔離敏感資源
-- 最小權限原則
+- ✅ VPN 使用 ChaCha20-Poly1305 加密
+- ✅ Security Groups 限制連線來源（僅允許你的 IP）
+- ✅ Private Subnet 隔離敏感資源
+- ✅ 最小權限原則
 
 **存取控制：**
-- Kubernetes RBAC
-- Calico Network Policies
-- AWS IAM 角色和政策
-- SSH 金鑰認證
+- ✅ Kubernetes RBAC
+- ✅ Calico Network Policies
+- ✅ AWS IAM 角色和政策
+- ✅ SSH 金鑰認證（無密碼登入）
 
 **監控與稽核：**
-- VPN 連線狀態監控
-- Kubernetes 事件日誌
-- 建議啟用 AWS CloudTrail
-- 建議啟用 VPC Flow Logs
+- ✅ VPN 連線狀態監控
+- ✅ Kubernetes 事件日誌
+- 💡 建議啟用 AWS CloudTrail
+- 💡 建議啟用 VPC Flow Logs
 
 ### 安全最佳實踐
 
@@ -483,32 +660,29 @@ ssh-keygen -t rsa -b 4096 -f ~/.ssh/hybridbridge-key-new
 aws ec2 import-key-pair --key-name hybridbridge-key-new ...
 
 # 2. 定期更新系統
-ssh -i ~/.ssh/hybridbridge-key ubuntu@$AWS_VPN_IP "sudo apt update && sudo apt upgrade -y"
+ssh -i ~/.ssh/hybridbridge-key ubuntu@$AWS_VPN_IP \
+    "sudo apt update && sudo apt upgrade -y"
 
 # 3. 監控 VPN 連線
 watch -n 5 'sudo wg show | grep handshake'
 
-# 4. 啟用 CloudWatch 監控（可選）
-# 在 AWS Console 中為 EC2 實例啟用詳細監控
+# 4. 審查 Security Group 規則
+cd terraform/aws
+terraform show | grep -A 20 "security_group"
 ```
 
-## 故障排除
+### 安全檢查清單
 
-### 快速診斷
+部署後請確認：
 
-```bash
-# 檢查 VPN 狀態
-sudo wg show
+- [ ] Security Groups 僅允許你的 IP
+- [ ] SSH 使用金鑰認證（非密碼）
+- [ ] WireGuard 配置檔權限為 600
+- [ ] 私鑰未被版本控制（已在 .gitignore）
+- [ ] NAT Gateway 限制 Private Subnet 的外連
+- [ ] Network Policies 正確套用
 
-# 檢查路由
-ip route | grep wg0
 
-# 檢查 Pod 狀態
-kubectl get pods -n hybridbridge
-
-# 執行完整診斷
-./scripts/collect-vpn-info.sh
-```
 
 ## 貢獻
 
@@ -520,4 +694,12 @@ kubectl get pods -n hybridbridge
 3. 提交變更 (`git commit -m 'Add some AmazingFeature'`)
 4. Push 到分支 (`git push origin feature/AmazingFeature`)
 5. 開啟 Pull Request
+
+**貢獻指南：**
+- Shell 腳本使用 `set -e` 和適當的錯誤處理
+- Terraform 使用標準格式 (`terraform fmt`)
+- 提供清楚的註解和文檔
+- 更新相關測試腳本
+
+
 
