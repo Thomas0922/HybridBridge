@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aws-endpoints
+  namespace: hybridbridge
+data:
+  # AWS Private Subnet 的 Test Server
+  aws-test-server: "http://10.0.2.108"
+  
+  # AWS VPN Gateway
+  aws-vpn-gateway: "10.0.1.241"
+  
+  # AWS VPC CIDR
+  aws-vpc-cidr: "10.0.0.0/16"

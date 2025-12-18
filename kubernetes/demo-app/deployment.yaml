@@ -1,0 +1,198 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hybrid-test-app
+  namespace: hybridbridge
+  labels:
+    app: hybrid-test-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: hybrid-test-app
+  template:
+    metadata:
+      labels:
+        app: hybrid-test-app
+    spec:
+      containers:
+      - name: app
+        image: python:3.11-slim
+        command: ["/bin/bash"]
+        args:
+          - -c
+          - |
+            set -e
+            echo "安裝相依套件..."
+            pip install flask requests --quiet
+            
+            echo "建立應用目錄..."
+            mkdir -p /app
+            
+            echo "建立 Flask 應用..."
+            cat > /app/server.py << 'PYEOF'
+            from flask import Flask, jsonify
+            import requests
+            import os
+            import socket
+            from datetime import datetime
+            
+            app = Flask(__name__)
+            
+            @app.route('/')
+            def home():
+                return jsonify({
+                    'service': 'HybridBridge Test App',
+                    'status': 'running',
+                    'pod_name': os.environ.get('HOSTNAME'),
+                    'pod_ip': socket.gethostbyname(socket.gethostname()),
+                    'node_name': os.environ.get('NODE_NAME', 'unknown'),
+                    'timestamp': datetime.now().isoformat()
+                })
+            
+            @app.route('/health')
+            def health():
+                return jsonify({
+                    'status': 'healthy',
+                    'timestamp': datetime.now().isoformat()
+                })
+            
+            @app.route('/test-aws')
+            def test_aws():
+                aws_endpoint = os.environ.get('AWS_TEST_SERVER', 'http://10.0.2.108')
+                print(f"Testing connection to AWS: {aws_endpoint}")
+                
+                try:
+                    response = requests.get(aws_endpoint, timeout=5)
+                    return jsonify({
+                        'status': 'success',
+                        'aws_endpoint': aws_endpoint,
+                        'aws_status_code': response.status_code,
+                        'aws_response_length': len(response.text),
+                        'connection': 'VPN tunnel working!',
+                        'message': 'Successfully connected to AWS Private Subnet',
+                        'timestamp': datetime.now().isoformat()
+                    })
+                except requests.exceptions.Timeout:
+                    return jsonify({
+                        'status': 'error',
+                        'aws_endpoint': aws_endpoint,
+                        'error': 'Connection timeout',
+                        'message': 'Failed to connect to AWS - timeout after 5 seconds'
+                    }), 504
+                except requests.exceptions.ConnectionError as e:
+                    return jsonify({
+                        'status': 'error',
+                        'aws_endpoint': aws_endpoint,
+                        'error': f'Connection error: {str(e)}',
+                        'message': 'Failed to connect to AWS - connection refused or network unreachable'
+                    }), 503
+                except Exception as e:
+                    return jsonify({
+                        'status': 'error',
+                        'aws_endpoint': aws_endpoint,
+                        'error': str(e),
+                        'message': 'Failed to connect to AWS'
+                    }), 500
+            
+            @app.route('/network-info')
+            def network_info():
+                import subprocess
+                
+                # 嘗試獲取路由資訊
+                try:
+                    route_info = subprocess.check_output(['ip', 'route'], text=True)
+                except:
+                    route_info = 'Unable to get route info'
+                
+                return jsonify({
+                    'pod_info': {
+                        'hostname': os.environ.get('HOSTNAME'),
+                        'pod_ip': socket.gethostbyname(socket.gethostname()),
+                        'node_name': os.environ.get('NODE_NAME', 'unknown')
+                    },
+                    'aws_endpoints': {
+                        'test_server': os.environ.get('AWS_TEST_SERVER'),
+                        'vpn_gateway': os.environ.get('AWS_VPN_GATEWAY')
+                    },
+                    'routes': route_info.split('\n')[:10]  # 只顯示前 10 條路由
+                })
+            
+            @app.route('/ping-test')
+            def ping_test():
+                import subprocess
+                
+                vpn_gateway = '192.168.100.2'
+                aws_test_server = os.environ.get('AWS_VPN_GATEWAY', '10.0.2.108')
+                
+                results = {}
+                
+                # Ping VPN Gateway
+                try:
+                    subprocess.check_output(['ping', '-c', '2', '-W', '2', vpn_gateway], 
+                                          stderr=subprocess.STDOUT, text=True)
+                    results['vpn_gateway'] = 'reachable'
+                except:
+                    results['vpn_gateway'] = 'unreachable'
+                
+                # Ping AWS Test Server
+                try:
+                    subprocess.check_output(['ping', '-c', '2', '-W', '2', aws_test_server], 
+                                          stderr=subprocess.STDOUT, text=True)
+                    results['aws_test_server'] = 'reachable'
+                except:
+                    results['aws_test_server'] = 'unreachable'
+                
+                return jsonify(results)
+            
+            if __name__ == '__main__':
+                print("Starting Flask application...")
+                print(f"AWS Test Server: {os.environ.get('AWS_TEST_SERVER', 'Not set')}")
+                print(f"AWS VPN Gateway: {os.environ.get('AWS_VPN_GATEWAY', 'Not set')}")
+                app.run(host='0.0.0.0', port=8080, debug=False)
+            PYEOF
+            
+            echo "啟動 Flask 應用..."
+            cd /app
+            python server.py
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: AWS_TEST_SERVER
+          valueFrom:
+            configMapKeyRef:
+              name: aws-endpoints
+              key: aws-test-server
+        - name: AWS_VPN_GATEWAY
+          valueFrom:
+            configMapKeyRef:
+              name: aws-endpoints
+              key: aws-vpn-gateway
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3

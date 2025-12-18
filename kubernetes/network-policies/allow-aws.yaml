@@ -1,0 +1,53 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-aws-access
+  namespace: hybridbridge
+spec:
+  podSelector:
+    matchLabels:
+      app: hybrid-test-app
+  policyTypes:
+  - Egress
+  egress:
+  # 允許訪問 AWS VPC (10.0.0.0/16) - HTTP/HTTPS
+  - to:
+    - ipBlock:
+        cidr: 10.0.0.0/16
+    ports:
+    - protocol: TCP
+      port: 80
+    - protocol: TCP
+      port: 443
+  
+  # 允許訪問 VPN Gateway 隧道網段（所有 TCP 流量）
+  - to:
+    - ipBlock:
+        cidr: 192.168.100.0/24
+    ports:
+    - protocol: TCP
+  
+  # 允許 DNS 查詢（UDP 53）
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  
+  # 允許訪問同命名空間的服務
+  - to:
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 8080
+  
+  # 允許訪問 Kubernetes API Server（用於健康檢查等）
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 443
