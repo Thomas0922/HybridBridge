@@ -69,11 +69,11 @@ echo "這可能需要 1-3 分鐘..."
 AWS_READY=false
 for i in {1..12}; do
     if ssh -i ~/.ssh/hybridbridge-key \
-           -o ConnectTimeout=5 \
+           -t \
+           -o ConnectTimeout=10 \
            -o StrictHostKeyChecking=no \
-           -o BatchMode=yes \
            ubuntu@$AWS_VPN_IP \
-           "sudo test -f /etc/wireguard/publickey" 2>/dev/null; then
+           "sudo test -f /etc/wireguard/publickey"; then
         AWS_READY=true
         break
     fi
