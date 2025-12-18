@@ -132,8 +132,52 @@ echo ""
 echo "【步驟 5/8】部署 AWS 基礎設施"
 echo -e "${YELLOW}這可能需要 5-10 分鐘...${NC}"
 
+cd "$PROJECT_ROOT/terraform/aws"
+
+# 初始化
 terraform init
-terraform apply -auto-approve
+
+# 1. 先嘗試刷新狀態 (這步通常能解決大部分狀態不同步問題)
+echo "正在刷新 Terraform 狀態..."
+terraform refresh
+
+# 2. 執行 Apply 並捕捉潛在錯誤
+echo "正在應用 Terraform 配置..."
+set +e  # 【關鍵】暫時關閉「發生錯誤即中止」，讓我們有機會處理錯誤
+terraform apply -auto-approve 2> terraform_error.log
+APPLY_EXIT_CODE=$?
+set -e  # 恢復「發生錯誤即中止」保護
+
+# 3. 檢查結果並執行自動修復
+if [ $APPLY_EXIT_CODE -ne 0 ]; then
+    echo -e "${YELLOW}⚠️  Terraform 部署遇到錯誤，正在診斷是否為已知問題...${NC}"
+    
+    # 檢查錯誤日誌中是否包含特定的路由錯誤訊息
+    if grep -q "Use CreateRoute instead" terraform_error.log; then
+        echo -e "${YELLOW}🔍 偵測到「路由狀態不一致」問題 (Route State Mismatch)。${NC}"
+        echo "原因：AWS 上找不到路由，但 Terraform 狀態檔認為它存在。"
+        echo "正在執行自動修復 (清除該路由狀態)..."
+        
+        # 執行修復指令
+        terraform state rm aws_route.to_k8s || true
+        
+        echo -e "${GREEN}✅ 狀態已清除，正在重新嘗試部署...${NC}"
+        # 重新執行部署 (這次應該會成功觸發 CreateRoute)
+        terraform apply -auto-approve
+        
+    else
+        # 如果是其他我們沒見過的錯誤，則原樣顯示並退出
+        echo -e "${RED}❌ 部署失敗 (非路由狀態問題)，請檢查以下錯誤：${NC}"
+        cat terraform_error.log
+        rm -f terraform_error.log
+        exit $APPLY_EXIT_CODE
+    fi
+fi
+
+# 清理暫存日誌
+rm -f terraform_error.log
+
+# --------------------
 
 terraform output > "$PROJECT_ROOT/docs/aws-outputs.txt"
 echo -e "${GREEN}✅ AWS 基礎設施已部署${NC}"
