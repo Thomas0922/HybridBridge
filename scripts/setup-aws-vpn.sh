@@ -90,7 +90,7 @@ echo "啟動 WireGuard 服務..."
 # 如果已經運行先停止，避免報錯
 sudo wg-quick down wg0 2>/dev/null || true
 sudo systemctl enable wg-quick@wg0
-sudo systemctl start wg-quick@wg0
+sudo systemctl restart wg-quick@wg0
 
 # 7. 驗證狀態
 if sudo wg show wg0 > /dev/null; then
