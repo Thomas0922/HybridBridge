@@ -196,6 +196,7 @@ sudo mv kubectl /usr/local/bin/
 
 # 驗證安裝
 kubectl version --client
+```
 
 ---
 ### 前置需求
