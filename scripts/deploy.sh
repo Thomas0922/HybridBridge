@@ -188,37 +188,44 @@ echo "等待 EC2 實例完全啟動（60 秒）..."
 sleep 60
 
 # 步驟 6: 安裝 Kubernetes (K3s)
-echo "【步驟 6/8】安裝 Kubernetes (K3s)"
+echo "【步驟 6/8】安裝與配置 Kubernetes"
 
-# 【檢查】是否已有 Kubernetes/K3s 安裝
-# 邏輯：如果 (kubectl 可用且能連線) 或者 (k3s 服務正在執行)，則視為已安裝
-if (command -v kubectl &> /dev/null && kubectl get nodes &>/dev/null) || (systemctl is-active --quiet k3s); then
-    echo -e "${YELLOW}⚠️  偵測到 Kubernetes (K3s) 已安裝，跳過安裝${NC}"
+# 1. 檢查 kubectl 是否已經可以正常運作 (可能是 RKE2, EKS, 或手動裝好的 K8s)
+if command -v kubectl &> /dev/null && kubectl get nodes &>/dev/null; then
+    echo -e "${GREEN}✅ 偵測到 kubectl 已可正常連線 (現有集群)，跳過安裝與配置${NC}"
+
+# 2. 如果 kubectl 不能用，但 K3s 服務有在跑 (代表是 K3s 但設定檔遺失)
+elif systemctl is-active --quiet k3s; then
+    echo -e "${YELLOW}⚠️  偵測到 K3s 服務正在運行，但 kubectl 無法連線${NC}"
+    echo "正在修復 K3s kubeconfig..."
+    mkdir -p ~/.kube
+    sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
+    sudo chown $(id -u):$(id -g) ~/.kube/config
+    echo -e "${GREEN}✅ K3s 設定檔已修復${NC}"
+
+# 3. 如果 kubectl 不能用，且 K3s 沒在跑 -> 執行全新安裝
 else
-    # --- 如果沒安裝，才執行以下步驟 ---
-
-    # 1. 檢查並關閉 Swap (K3s 建議需求)
-    echo "檢查並關閉 Swap..."
+    echo "未偵測到運作中的 Kubernetes，開始安裝 K3s..."
+    
+    # 關閉 Swap
     if [ $(sudo swapon --show | wc -l) -gt 0 ]; then
-        echo "⚠️  偵測到 Swap 已啟用，正在關閉..."
         sudo swapoff -a
         sudo sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
-        echo "✅ Swap 已關閉"
     fi
 
-    # 2. 執行 K3s 安裝
-    echo "開始下載並安裝 K3s..."
+    # 安裝 K3s
     curl -sfL https://get.k3s.io | sh -s - --write-kubeconfig-mode 644 \
         --cluster-cidr=10.244.0.0/16 \
         --service-cidr=10.96.0.0/12
     
-    # 3. 設定 kubeconfig
+    # 配置權限
     mkdir -p ~/.kube
     sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
     sudo chown $(id -u):$(id -g) ~/.kube/config
     
-    echo -e "${GREEN}✅ K3s 安裝完成${NC}"
+    echo -e "${GREEN}✅ K3s 安裝並配置完成${NC}"
 fi
+
 echo ""
 
 # 步驟 7: 設定 VPN
