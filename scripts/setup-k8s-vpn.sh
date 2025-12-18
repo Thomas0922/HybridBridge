@@ -73,7 +73,7 @@ for i in {1..12}; do
            -o StrictHostKeyChecking=no \
            -o BatchMode=yes \
            ubuntu@$AWS_VPN_IP \
-           "test -f /etc/wireguard/publickey" 2>/dev/null; then
+           "sudo test -f /etc/wireguard/publickey" 2>/dev/null; then
         AWS_READY=true
         break
     fi
