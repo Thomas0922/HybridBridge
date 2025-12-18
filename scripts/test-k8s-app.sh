@@ -102,12 +102,6 @@ TEST_SERVER_IP=$(terraform output -raw test_server_private_ip)
 cd "$PROJECT_ROOT"
 # ========================
 
-echo "測試 ping AWS VPN Gateway..."
-if kubectl exec -n hybridbridge $POD_NAME -- ping -c 2 192.168.100.2 > /dev/null 2>&1; then
-    echo "✅ 可以 ping 通 AWS VPN Gateway"
-else
-    echo "⚠️  無法 ping AWS VPN Gateway（可能 ICMP 被阻擋）"
-fi
 
 echo "測試 HTTP 到 AWS Test Server..."
 # 使用 Python requests 直接測試，不需要安裝 curl
