@@ -2,11 +2,15 @@
 
 set -e
 
+# 獲取腳本所在目錄和項目根目錄
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
+
 echo "=== 更新 Kubernetes ConfigMap 中的 AWS IP 地址 ==="
 echo ""
 
 # 檢查 Terraform 狀態
-cd ~/hybridbridge/terraform/aws
+cd "$PROJECT_ROOT/terraform/aws"
 
 if [ ! -f "terraform.tfstate" ]; then
     echo "❌ 找不到 terraform.tfstate"
@@ -30,7 +34,7 @@ echo ""
 
 # 更新 ConfigMap
 echo "【2】更新 ConfigMap..."
-cd ~/hybridbridge
+cd "$PROJECT_ROOT"
 
 # 備份原始檔案
 cp kubernetes/demo-app/configmap.yaml kubernetes/demo-app/configmap.yaml.bak
