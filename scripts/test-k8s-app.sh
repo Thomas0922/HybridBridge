@@ -2,6 +2,11 @@
 
 set -e
 
+# === 新增：動態獲取專案根目錄 ===
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
+# ==============================
+
 echo "╔════════════════════════════════════════════════════╗"
 echo "║  Phase 6: Kubernetes 應用測試                     ║"
 echo "╚════════════════════════════════════════════════════╝"
@@ -91,9 +96,11 @@ echo "【6】測試從 Pod 直接訪問 AWS"
 POD_NAME=$(kubectl get pods -n hybridbridge -l app=hybrid-test-app -o jsonpath='{.items[0].metadata.name}')
 echo "使用 Pod: $POD_NAME"
 
-cd ~/hybridbridge/terraform/aws
+# === 修改：使用動態路徑 ===
+cd "$PROJECT_ROOT/terraform/aws"
 TEST_SERVER_IP=$(terraform output -raw test_server_private_ip)
-cd ~/hybridbridge
+cd "$PROJECT_ROOT"
+# ========================
 
 echo "測試 ping AWS VPN Gateway..."
 if kubectl exec -n hybridbridge $POD_NAME -- ping -c 2 192.168.100.2 > /dev/null 2>&1; then
