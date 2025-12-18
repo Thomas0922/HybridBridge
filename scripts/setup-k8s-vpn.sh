@@ -67,7 +67,7 @@ echo "【4/7】等待 AWS VPN Gateway 就緒並獲取公鑰..."
 echo "這可能需要 1-3 分鐘..."
 
 AWS_READY=false
-for i in {1..30}; do
+for i in {1..12}; do
     if ssh -i ~/.ssh/hybridbridge-key \
            -o ConnectTimeout=5 \
            -o StrictHostKeyChecking=no \
@@ -78,7 +78,7 @@ for i in {1..30}; do
         break
     fi
     
-    if [ $i -eq 30 ]; then
+    if [ $i -eq 12 ]; then
         echo ""
         echo "❌ 等待超時（5 分鐘）"
         echo "請檢查："
