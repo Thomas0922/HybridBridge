@@ -2,6 +2,13 @@
 
 set -e
 
+# 獲取腳本所在目錄和項目根目錄
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
+
+echo "📁 項目根目錄: $PROJECT_ROOT"
+echo ""
+
 # 顏色定義
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -34,9 +41,9 @@ echo ""
 
 # 步驟 1: 獲取公網 IP
 echo "【步驟 1/8】獲取公網 IP"
-mkdir -p ~/hybridbridge/docs
-curl -s ifconfig.me > ~/hybridbridge/docs/my-public-ip.txt
-MY_PUBLIC_IP=$(cat ~/hybridbridge/docs/my-public-ip.txt)
+mkdir -p "$PROJECT_ROOT/docs"
+curl -s ifconfig.me > "$PROJECT_ROOT/docs/my-public-ip.txt"
+MY_PUBLIC_IP=$(cat "$PROJECT_ROOT/docs/my-public-ip.txt")
 echo -e "${GREEN}✅ 您的公網 IP: $MY_PUBLIC_IP${NC}"
 echo ""
 
@@ -69,7 +76,7 @@ echo ""
 
 # 步驟 4: 創建 Terraform 變數檔
 echo "【步驟 4/8】創建 Terraform 配置"
-cd ~/hybridbridge/terraform/aws
+cd "$PROJECT_ROOT/terraform/aws"
 
 cat > terraform.tfvars <<EOF
 aws_region      = "$AWS_REGION"
@@ -91,7 +98,7 @@ echo -e "${YELLOW}這可能需要 5-10 分鐘...${NC}"
 terraform init
 terraform apply -auto-approve
 
-terraform output > ~/hybridbridge/docs/aws-outputs.txt
+terraform output > "$PROJECT_ROOT/docs/aws-outputs.txt"
 echo -e "${GREEN}✅ AWS 基礎設施已部署${NC}"
 echo ""
 
@@ -122,7 +129,7 @@ echo "【步驟 7/8】設定 WireGuard VPN"
 
 # 設定 K8s 端
 echo "設定 K8s 端 VPN..."
-cd ~/hybridbridge
+cd "$PROJECT_ROOT"
 sudo bash scripts/setup-k8s-vpn.sh
 
 # 設定 AWS 端
@@ -135,7 +142,7 @@ sudo wg-quick up wg0
 sudo systemctl enable wg-quick@wg0
 
 # 啟動 AWS 端 VPN
-AWS_VPN_IP=$(cd ~/hybridbridge/terraform/aws && terraform output -raw vpn_gateway_public_ip)
+AWS_VPN_IP=$(cd "$PROJECT_ROOT/terraform/aws" && terraform output -raw vpn_gateway_public_ip)
 echo "啟動 AWS 端 VPN..."
 ssh -i ~/.ssh/hybridbridge-key ubuntu@$AWS_VPN_IP \
     "sudo wg-quick up wg0 && sudo systemctl enable wg-quick@wg0"
