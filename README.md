@@ -188,7 +188,7 @@ aws sts get-caller-identity
 **Linux (Ubuntu/Debian)：**
 ```bash
 # 下載最新穩定版
-curl -LO "[https://dl.k8s.io/release/$(curl](https://dl.k8s.io/release/$(curl) -L -s [https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl](https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl)"
+curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
 
 # 設定執行權限並移動到 PATH
 chmod +x kubectl
