@@ -107,6 +107,22 @@ echo "等待 EC2 實例完全啟動（60 秒）..."
 sleep 60
 
 # 步驟 6: 安裝 K3s
+# 檢查並關閉 Swap
+echo "檢查 Swap 狀態..."
+if [ $(sudo swapon --show | wc -l) -gt 0 ]; then
+    echo "⚠️  偵測到 Swap 已啟用，正在關閉..."
+    
+    # 1. 暫時關閉 (立即生效)
+    sudo swapoff -a
+    
+    # 2. 永久關閉 (修改 /etc/fstab，避免重開機後恢復)
+    # 在 swap 相關設定行前面加上 # 註解
+    sudo sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
+    
+    echo "✅ Swap 已關閉"
+else
+    echo "✅ Swap 已處於關閉狀態"
+fi
 echo "【步驟 6/8】安裝 Kubernetes (K3s)"
 if command -v kubectl &> /dev/null && kubectl get nodes &>/dev/null; then
     echo -e "${YELLOW}⚠️  K3s 已安裝，跳過安裝${NC}"
