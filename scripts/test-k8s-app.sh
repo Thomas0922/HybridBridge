@@ -110,7 +110,8 @@ else
 fi
 
 echo "測試 HTTP 到 AWS Test Server..."
-if kubectl exec -n hybridbridge $POD_NAME -- sh -c "apt-get update -qq && apt-get install -y -qq curl > /dev/null 2>&1 && curl -s -f http://$TEST_SERVER_IP > /dev/null" 2>/dev/null; then
+# 使用 Python requests 直接測試，不需要安裝 curl
+if kubectl exec -n hybridbridge $POD_NAME -- python -c "import requests; exit(0 if requests.get('http://$TEST_SERVER_IP', timeout=5).ok else 1)" 2>/dev/null; then
     echo "✅ 可以 HTTP 連線到 AWS Test Server"
 else
     echo "❌ 無法 HTTP 連線到 AWS Test Server"
