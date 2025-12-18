@@ -10,6 +10,14 @@ spec:
   policyTypes:
   - Egress
   egress:
+  # --- 新增這段：允許 HTTPS 訪問公網 (為了 pip install) ---
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+    ports:
+    - protocol: TCP
+      port: 443
+  # ----------------------------------------------------
   # 允許訪問 AWS VPC (10.0.0.0/16) - HTTP/HTTPS
   - to:
     - ipBlock:
