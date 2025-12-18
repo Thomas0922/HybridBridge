@@ -2,13 +2,17 @@
 
 set -e
 
+# 獲取腳本所在目錄和項目根目錄
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
+
 echo "╔════════════════════════════════════════════════════╗"
 echo "║     設定 K8s 端 WireGuard VPN                     ║"
 echo "╚════════════════════════════════════════════════════╝"
 echo ""
 
 # 確認必要目錄存在
-mkdir -p ~/hybridbridge/docs
+mkdir -p "$PROJECT_ROOT/docs"
 
 # 【1】檢查並安裝 WireGuard
 echo "【1/7】檢查 WireGuard..."
@@ -33,14 +37,14 @@ else
 fi
 
 # 儲存 K8s 公鑰
-sudo cat /etc/wireguard/publickey > ~/hybridbridge/docs/k8s-vpn-pubkey.txt
-K8S_PUBKEY=$(cat ~/hybridbridge/docs/k8s-vpn-pubkey.txt)
+sudo cat /etc/wireguard/publickey > "$PROJECT_ROOT/docs/k8s-vpn-pubkey.txt"
+K8S_PUBKEY=$(cat "$PROJECT_ROOT/docs/k8s-vpn-pubkey.txt")
 echo "✅ K8s 公鑰: $K8S_PUBKEY"
 echo ""
 
 # 【3】獲取 AWS VPN Gateway IP
 echo "【3/7】獲取 AWS VPN Gateway IP..."
-cd ~/hybridbridge/terraform/aws
+cd "$PROJECT_ROOT/terraform/aws"
 
 if [ ! -f "terraform.tfstate" ]; then
     echo "❌ 找不到 terraform.tfstate"
@@ -55,7 +59,7 @@ if [ -z "$AWS_VPN_IP" ]; then
 fi
 
 echo "✅ AWS VPN Gateway IP: $AWS_VPN_IP"
-cd ~/hybridbridge
+cd "$PROJECT_ROOT"
 echo ""
 
 # 【4】等待 AWS 實例並獲取公鑰
@@ -97,9 +101,9 @@ fi
 ssh -i ~/.ssh/hybridbridge-key \
     -o StrictHostKeyChecking=no \
     ubuntu@$AWS_VPN_IP \
-    "sudo cat /etc/wireguard/publickey" > ~/hybridbridge/docs/aws-vpn-pubkey.txt
+    "sudo cat /etc/wireguard/publickey" > "$PROJECT_ROOT/docs/aws-vpn-pubkey.txt"
 
-AWS_PUBKEY=$(cat ~/hybridbridge/docs/aws-vpn-pubkey.txt)
+AWS_PUBKEY=$(cat "$PROJECT_ROOT/docs/aws-vpn-pubkey.txt")
 echo "✅ AWS 公鑰: $AWS_PUBKEY"
 echo ""
 
