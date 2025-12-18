@@ -47,29 +47,66 @@ MY_PUBLIC_IP=$(cat "$PROJECT_ROOT/docs/my-public-ip.txt")
 echo -e "${GREEN}✅ 您的公網 IP: $MY_PUBLIC_IP${NC}"
 echo ""
 
-# 步驟 2: 生成 SSH 金鑰
-echo "【步驟 2/8】生成 SSH 金鑰"
-if [ ! -f ~/.ssh/hybridbridge-key ]; then
-    ssh-keygen -t rsa -b 4096 -f ~/.ssh/hybridbridge-key -N "" -C "hybridbridge"
-    echo -e "${GREEN}✅ SSH 金鑰已生成${NC}"
-else
-    echo -e "${YELLOW}⚠️  SSH 金鑰已存在，跳過生成${NC}"
-fi
-echo ""
+# 定義金鑰路徑變數 (方便管理)
+KEY_NAME="hybridbridge-key"
+KEY_PATH="$HOME/.ssh/hybridbridge-key"
 
-# 步驟 3: 上傳 SSH 金鑰到 AWS
-echo "【步驟 3/8】上傳 SSH 金鑰到 AWS"
+# 步驟 2: 生成與檢查 SSH 金鑰
+echo "【步驟 2 & 3 / 8】SSH 金鑰生成與同步"
+
+# 2.1 確保本地金鑰存在
+if [ ! -f "$KEY_PATH" ]; then
+    echo "本地未找到金鑰，正在生成..."
+    ssh-keygen -t rsa -b 4096 -f "$KEY_PATH" -N "" -C "hybridbridge"
+    echo -e "${GREEN}✅ 本地 SSH 金鑰已生成${NC}"
+else
+    echo -e "${YELLOW}⚠️  本地 SSH 金鑰已存在${NC}"
+fi
+
+# 2.2 設定 AWS 區域
 read -p "請輸入 AWS 區域（預設: us-west-2）: " AWS_REGION
 AWS_REGION=${AWS_REGION:-us-west-2}
 
-# 檢查金鑰是否已存在
-if aws ec2 describe-key-pairs --key-names hybridbridge-key --region $AWS_REGION &>/dev/null; then
-    echo -e "${YELLOW}⚠️  金鑰對已存在於 AWS，跳過上傳${NC}"
+# 2.3 檢查與同步 AWS 金鑰
+echo "檢查 AWS 上的金鑰狀態..."
+
+# 檢查 AWS 上是否已有同名金鑰
+if aws ec2 describe-key-pairs --key-names "$KEY_NAME" --region "$AWS_REGION" &>/dev/null; then
+    
+    # 獲取 AWS 上的指紋 (Import 的金鑰 AWS 儲存的是 MD5 指紋)
+    AWS_FP=$(aws ec2 describe-key-pairs --key-names "$KEY_NAME" --region "$AWS_REGION" --query 'KeyPairs[0].KeyFingerprint' --output text)
+    
+    # 計算本地公鑰的 MD5 指紋 (與 AWS 格式對齊)
+    # ssh-keygen 輸出格式通常為: "4096 MD5:xx:xx... comment (RSA)"
+    LOCAL_FP=$(ssh-keygen -l -E md5 -f "${KEY_PATH}.pub" | awk '{print $2}' | sed 's/MD5://')
+
+    echo "AWS 指紋:  $AWS_FP"
+    echo "本地指紋:  $LOCAL_FP"
+
+    if [ "$AWS_FP" != "$LOCAL_FP" ]; then
+        echo -e "${RED}❌ 偵測到指紋不匹配！${NC}"
+        echo "AWS 上的金鑰與本地不同（可能是舊部署殘留）。"
+        echo "正在刪除 AWS 舊金鑰以強制同步..."
+        
+        # 刪除不匹配的舊金鑰
+        aws ec2 delete-key-pair --key-name "$KEY_NAME" --region "$AWS_REGION"
+        
+        # 重新上傳
+        echo "正在上傳正確的本地金鑰..."
+        aws ec2 import-key-pair \
+            --key-name "$KEY_NAME" \
+            --public-key-material "fileb://${KEY_PATH}.pub" \
+            --region "$AWS_REGION"
+        echo -e "${GREEN}✅ 金鑰已更新並重新上傳${NC}"
+    else
+        echo -e "${GREEN}✅ 金鑰指紋完全匹配，無需變更${NC}"
+    fi
 else
+    echo "AWS 上尚無此金鑰，正在上傳..."
     aws ec2 import-key-pair \
-        --key-name hybridbridge-key \
-        --public-key-material fileb://~/.ssh/hybridbridge-key.pub \
-        --region $AWS_REGION
+        --key-name "$KEY_NAME" \
+        --public-key-material "fileb://${KEY_PATH}.pub" \
+        --region "$AWS_REGION"
     echo -e "${GREEN}✅ SSH 金鑰已上傳到 AWS${NC}"
 fi
 echo ""
