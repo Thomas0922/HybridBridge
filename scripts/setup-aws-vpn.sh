@@ -3,7 +3,7 @@
 set -e
 
 # 定義路徑
-PROJECT_ROOT=~/hybridbridge
+PROJECT_ROOT=~/HybridBridge
 DOCS_DIR=$PROJECT_ROOT/docs
 TF_DIR=$PROJECT_ROOT/terraform/aws
 
