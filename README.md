@@ -92,6 +92,96 @@ HybridBridge 是一個生產級的混合雲網路解決方案，透過 WireGuard
 
 ## 快速開始
 
+### 環境準備
+
+在開始部署之前，請先安裝必要的工具。
+
+#### 安裝 AWS CLI
+
+AWS CLI 是與 AWS 服務互動的命令行工具，部署過程中會用到。
+
+**Ubuntu/Debian：**
+```bash
+# 方法 1：使用官方安裝腳本（推薦）
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+sudo apt install -y unzip
+unzip awscliv2.zip
+sudo ./aws/install
+
+# 驗證安裝
+aws --version
+# 應該顯示：aws-cli/2.x.x ...
+```
+
+**macOS：**
+```bash
+# 使用 Homebrew
+brew install awscli
+
+# 驗證安裝
+aws --version
+```
+
+**其他安裝方式：**
+- 官方文檔：https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
+
+#### 安裝 Terraform
+
+```bash
+# Ubuntu/Debian
+wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+sudo apt update && sudo apt install -y terraform
+
+# 驗證安裝
+terraform --version
+```
+
+**其他安裝方式：**
+- 官方文檔：https://developer.hashicorp.com/terraform/install
+
+#### 安裝其他必要工具
+
+```bash
+# Git（通常已預裝）
+sudo apt install -y git
+
+# curl（通常已預裝）
+sudo apt install -y curl
+
+# kubectl 會由 K3s 安裝腳本自動安裝
+```
+
+#### 配置 AWS 憑證
+
+安裝 AWS CLI 後，需要配置你的 AWS 憑證：
+
+```bash
+aws configure
+```
+
+系統會提示輸入以下資訊：
+```
+AWS Access Key ID [None]: 你的-ACCESS-KEY-ID
+AWS Secret Access Key [None]: 你的-SECRET-ACCESS-KEY
+Default region name [None]: us-west-2
+Default output format [None]: json
+```
+
+**獲取 AWS 憑證的步驟：**
+1. 登入 [AWS Console](https://console.aws.amazon.com/)
+2. 點擊右上角的帳戶名稱 → Security credentials
+3. 在「Access keys」區域點擊「Create access key」
+4. 下載並保存你的 Access Key ID 和 Secret Access Key
+
+**驗證配置：**
+```bash
+aws sts get-caller-identity
+```
+
+應該會顯示你的 AWS 帳戶資訊，表示配置成功。
+
+---
 ### 前置需求
 
 **環境需求：**
