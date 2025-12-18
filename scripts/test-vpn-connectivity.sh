@@ -2,9 +2,21 @@
 
 set -e
 
-cd ~/hybridbridge/terraform/aws
+# === 新增：動態獲取專案根目錄 ===
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
+# ==============================
+
+
+# 使用動態路徑
+cd "$PROJECT_ROOT/terraform/aws"
+
 TEST_SERVER_IP=$(terraform output -raw test_server_private_ip)
-cd ~/hybridbridge
+
+# 修改前：寫死的路徑
+# cd ~/hybridbridge
+# 修改後：回到專案根目錄
+cd "$PROJECT_ROOT"
 
 echo "=== WireGuard VPN 連通性測試 ==="
 echo ""
