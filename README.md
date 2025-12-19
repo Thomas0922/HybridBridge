@@ -494,10 +494,10 @@ hybridbridge/
 │       └── allow-aws.yaml             # 允許訪問 AWS 的網路策略
 │
 ├── scripts/                           # 自動化腳本
-│   ├── deploy.sh                      # 一鍵自動化部署（新增）
+│   ├── deploy.sh                      # 一鍵自動化部署
 │   ├── setup-k8s-vpn.sh              # K8s 端 VPN 設定
 │   ├── setup-aws-vpn.sh              # AWS 端 VPN 設定
-│   ├── update-configmap.sh           # 更新 ConfigMap IP（新增）
+│   ├── update-configmap.sh           # 更新 ConfigMap IP
 │   ├── test-vpn-connectivity.sh      # VPN 連通性測試
 │   ├── test-k8s-app.sh               # Kubernetes 應用測試
 │   ├── phase6-final-check.sh         # 完整系統驗證
@@ -507,7 +507,7 @@ hybridbridge/
 │
 └── docs/                              # 文檔目錄
     ├── architecture.md                # 詳細架構說明
-    ├── troubleshooting.md             # 故障排除指南（新增）
+    ├── troubleshooting.md             # 故障排除指南
     ├── my-public-ip.txt               # 本機公網 IP（自動生成）
     ├── aws-outputs.txt                # Terraform 輸出（自動生成）
     ├── k8s-vpn-pubkey.txt             # K8s VPN 公鑰（自動生成）
