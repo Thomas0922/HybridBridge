@@ -6,7 +6,7 @@ set -e
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
 
-echo "📁 項目根目錄: $PROJECT_ROOT"
+echo " 項目根目錄: $PROJECT_ROOT"
 echo ""
 
 # 顏色定義
@@ -15,9 +15,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-echo "╔════════════════════════════════════════════════════╗"
-echo "║     HybridBridge 自動化部署腳本                   ║"
-echo "╚════════════════════════════════════════════════════╝"
+echo "HybridBridge 自動化部署腳本"
 echo ""
 
 # 檢查必要工具
@@ -31,12 +29,12 @@ for tool in terraform aws kubectl curl ssh-keygen; do
 done
 
 if [ ! -z "$MISSING_TOOLS" ]; then
-    echo -e "${RED}❌ 缺少必要工具:$MISSING_TOOLS${NC}"
+    echo -e "${RED} 缺少必要工具:$MISSING_TOOLS${NC}"
     echo "請安裝缺少的工具後再執行此腳本"
     exit 1
 fi
 
-echo -e "${GREEN}✅ 所有必要工具已安裝${NC}"
+echo -e "${GREEN} 所有必要工具已安裝${NC}"
 echo ""
 
 # 步驟 1: 獲取公網 IP
@@ -44,7 +42,7 @@ echo "【步驟 1/8】獲取公網 IP"
 mkdir -p "$PROJECT_ROOT/docs"
 curl -s ifconfig.me > "$PROJECT_ROOT/docs/my-public-ip.txt"
 MY_PUBLIC_IP=$(cat "$PROJECT_ROOT/docs/my-public-ip.txt")
-echo -e "${GREEN}✅ 您的公網 IP: $MY_PUBLIC_IP${NC}"
+echo -e "${GREEN}您的公網 IP: $MY_PUBLIC_IP${NC}"
 echo ""
 
 # 定義金鑰路徑變數 (方便管理)
@@ -58,9 +56,9 @@ echo "【步驟 2 & 3 / 8】SSH 金鑰生成與同步"
 if [ ! -f "$KEY_PATH" ]; then
     echo "本地未找到金鑰，正在生成..."
     ssh-keygen -t rsa -b 4096 -f "$KEY_PATH" -N "" -C "hybridbridge"
-    echo -e "${GREEN}✅ 本地 SSH 金鑰已生成${NC}"
+    echo -e "${GREEN}本地 SSH 金鑰已生成${NC}"
 else
-    echo -e "${YELLOW}⚠️  本地 SSH 金鑰已存在${NC}"
+    echo -e "${YELLOW} 本地 SSH 金鑰已存在${NC}"
 fi
 
 # 2.2 設定 AWS 區域
@@ -84,7 +82,7 @@ if aws ec2 describe-key-pairs --key-names "$KEY_NAME" --region "$AWS_REGION" &>/
     echo "本地指紋:  $LOCAL_FP"
 
     if [ "$AWS_FP" != "$LOCAL_FP" ]; then
-        echo -e "${RED}❌ 偵測到指紋不匹配！${NC}"
+        echo -e "${RED}偵測到指紋不匹配！${NC}"
         echo "AWS 上的金鑰與本地不同（可能是舊部署殘留）。"
         echo "正在刪除 AWS 舊金鑰以強制同步..."
         
@@ -97,9 +95,9 @@ if aws ec2 describe-key-pairs --key-names "$KEY_NAME" --region "$AWS_REGION" &>/
             --key-name "$KEY_NAME" \
             --public-key-material "fileb://${KEY_PATH}.pub" \
             --region "$AWS_REGION"
-        echo -e "${GREEN}✅ 金鑰已更新並重新上傳${NC}"
+        echo -e "${GREEN} 金鑰已更新並重新上傳${NC}"
     else
-        echo -e "${GREEN}✅ 金鑰指紋完全匹配，無需變更${NC}"
+        echo -e "${GREEN}金鑰指紋完全匹配，無需變更${NC}"
     fi
 else
     echo "AWS 上尚無此金鑰，正在上傳..."
@@ -107,7 +105,7 @@ else
         --key-name "$KEY_NAME" \
         --public-key-material "fileb://${KEY_PATH}.pub" \
         --region "$AWS_REGION"
-    echo -e "${GREEN}✅ SSH 金鑰已上傳到 AWS${NC}"
+    echo -e "${GREEN}SSH 金鑰已上傳到 AWS${NC}"
 fi
 echo ""
 
@@ -125,7 +123,7 @@ key_pair_name   = "hybridbridge-key"
 allowed_ssh_cidr = ["$MY_PUBLIC_IP/32"]
 EOF
 
-echo -e "${GREEN}✅ Terraform 變數檔已創建${NC}"
+echo -e "${GREEN}Terraform 變數檔已創建${NC}"
 echo ""
 
 # 步驟 5: 部署 AWS 基礎設施
@@ -150,24 +148,24 @@ set -e  # 恢復「發生錯誤即中止」保護
 
 # 3. 檢查結果並執行自動修復
 if [ $APPLY_EXIT_CODE -ne 0 ]; then
-    echo -e "${YELLOW}⚠️  Terraform 部署遇到錯誤，正在診斷是否為已知問題...${NC}"
+    echo -e "${YELLOW}Terraform 部署遇到錯誤，正在診斷是否為已知問題...${NC}"
     
     # 檢查錯誤日誌中是否包含特定的路由錯誤訊息
     if grep -q "Use CreateRoute instead" terraform_error.log; then
-        echo -e "${YELLOW}🔍 偵測到「路由狀態不一致」問題 (Route State Mismatch)。${NC}"
+        echo -e "${YELLOW}偵測到「路由狀態不一致」問題 (Route State Mismatch)。${NC}"
         echo "原因：AWS 上找不到路由，但 Terraform 狀態檔認為它存在。"
         echo "正在執行自動修復 (清除該路由狀態)..."
         
         # 執行修復指令
         terraform state rm aws_route.to_k8s || true
         
-        echo -e "${GREEN}✅ 狀態已清除，正在重新嘗試部署...${NC}"
+        echo -e "${GREEN}狀態已清除，正在重新嘗試部署...${NC}"
         # 重新執行部署 (這次應該會成功觸發 CreateRoute)
         terraform apply -auto-approve
         
     else
         # 如果是其他我們沒見過的錯誤，則原樣顯示並退出
-        echo -e "${RED}❌ 部署失敗 (非路由狀態問題)，請檢查以下錯誤：${NC}"
+        echo -e "${RED}部署失敗 (非路由狀態問題)，請檢查以下錯誤：${NC}"
         cat terraform_error.log
         rm -f terraform_error.log
         exit $APPLY_EXIT_CODE
@@ -180,7 +178,7 @@ rm -f terraform_error.log
 # --------------------
 
 terraform output > "$PROJECT_ROOT/docs/aws-outputs.txt"
-echo -e "${GREEN}✅ AWS 基礎設施已部署${NC}"
+echo -e "${GREEN} AWS 基礎設施已部署${NC}"
 echo ""
 
 # 等待 EC2 實例完全啟動
@@ -192,16 +190,16 @@ echo "【步驟 6/8】安裝與配置 Kubernetes"
 
 # 1. 檢查 kubectl 是否已經可以正常運作 (可能是 RKE2, EKS, 或手動裝好的 K8s)
 if command -v kubectl &> /dev/null && kubectl get nodes &>/dev/null; then
-    echo -e "${GREEN}✅ 偵測到 kubectl 已可正常連線 (現有集群)，跳過安裝與配置${NC}"
+    echo -e "${GREEN} 偵測到 kubectl 已可正常連線 (現有集群)，跳過安裝與配置${NC}"
 
 # 2. 如果 kubectl 不能用，但 K3s 服務有在跑 (代表是 K3s 但設定檔遺失)
 elif systemctl is-active --quiet k3s; then
-    echo -e "${YELLOW}⚠️  偵測到 K3s 服務正在運行，但 kubectl 無法連線${NC}"
+    echo -e "${YELLOW} 偵測到 K3s 服務正在運行，但 kubectl 無法連線${NC}"
     echo "正在修復 K3s kubeconfig..."
     mkdir -p ~/.kube
     sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
     sudo chown $(id -u):$(id -g) ~/.kube/config
-    echo -e "${GREEN}✅ K3s 設定檔已修復${NC}"
+    echo -e "${GREEN}K3s 設定檔已修復${NC}"
 
 # 3. 如果 kubectl 不能用，且 K3s 沒在跑 -> 執行全新安裝
 else
@@ -223,7 +221,7 @@ else
     sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
     sudo chown $(id -u):$(id -g) ~/.kube/config
     
-    echo -e "${GREEN}✅ K3s 安裝並配置完成${NC}"
+    echo -e "${GREEN}K3s 安裝並配置完成${NC}"
 fi
 
 echo ""
@@ -256,7 +254,7 @@ AWS_VPN_IP=$(cd "$PROJECT_ROOT/terraform/aws" && terraform output -raw vpn_gatew
 echo "檢查 AWS 端 VPN 狀態..."
 ssh -i ~/.ssh/hybridbridge-key ubuntu@$AWS_VPN_IP "sudo wg show wg0"
 
-echo -e "${GREEN}✅ VPN 已啟動${NC}"
+echo -e "${GREEN}VPN 已啟動${NC}"
 echo ""
 
 # 測試 VPN 連線
@@ -278,7 +276,7 @@ kubectl apply -f kubernetes/network-policies/
 echo "等待 Pods 就緒..."
 kubectl wait --for=condition=Ready pods -l app=hybrid-test-app -n hybridbridge --timeout=300s
 
-echo -e "${GREEN}✅ 應用已部署${NC}"
+echo -e "${GREEN}應用已部署${NC}"
 echo ""
 
 # 最終測試
@@ -286,17 +284,17 @@ echo "【最終驗證】"
 bash scripts/test-k8s-app.sh
 
 echo ""
-echo "╔════════════════════════════════════════════════════╗"
-echo "║          🎉 部署完成！                            ║"
-echo "╠════════════════════════════════════════════════════╣"
-echo "║                                                    ║"
-echo "║  ✅ AWS 基礎設施已建立                            ║"
-echo "║  ✅ Kubernetes 集群運行中                         ║"
-echo "║  ✅ VPN 隧道已連接                                ║"
-echo "║  ✅ 混合雲應用運行中                              ║"
-echo "║                                                    ║"
-echo "║  接下來可以：                                      ║"
-echo "║  1. 執行互動式展示: ./scripts/demo-hybrid-cloud.sh ║"
-echo "║  2. 查看系統狀態: ./scripts/phase6-final-check.sh  ║"
-echo "║                                                    ║"
-echo "╚════════════════════════════════════════════════════╝"
+echo "====================================================="
+echo "                   部署完成！                       "
+echo "====================================================="
+echo ""
+echo "   AWS 基礎設施已建立"
+echo "   Kubernetes 集群運行中"
+echo "   VPN 隧道已連接"
+echo "   混合雲應用運行中"
+echo ""
+echo "  接下來可以:"
+echo "  1. 執行互動式展示: ./scripts/demo-hybrid-cloud.sh "
+echo "  2. 查看系統狀態: ./scripts/phase6-final-check.sh  "
+echo ""
+
